@@ -62,11 +62,17 @@ export class LiveEngine {
 
     if (!shouldClose) return null;
 
+    // `p.amount` already bakes in leverage (margin * leverage / entryPrice),
+    // so profit is units × price move — `pnlPct` (leverage applied once) is
+    // kept only for the display return-on-margin figure, never the dollar amount.
+    const profit =
+      p.type === "LONG"
+        ? p.amount * (exitPrice - p.entryPrice)
+        : p.amount * (p.entryPrice - exitPrice);
     const pnlPct =
       p.type === "LONG"
         ? ((exitPrice - p.entryPrice) / p.entryPrice) * config.leverage
         : ((p.entryPrice - exitPrice) / p.entryPrice) * config.leverage;
-    const profit = p.amount * p.entryPrice * pnlPct;
     this.balance = Math.max(0, this.balance + profit);
     this.position = null;
 

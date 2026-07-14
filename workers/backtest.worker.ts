@@ -65,11 +65,18 @@ function runSimulation(candles: Candle[], config: StrategyConfig): BacktestResul
       }
 
       if (shouldClose) {
+        // `amount` already bakes in leverage via position sizing below
+        // (margin * leverage / entryPrice) — profit is just units × price
+        // move. `pnlPct` is leverage applied exactly once, kept only for
+        // the *display* return-on-margin figure, never for the dollar amount.
+        const profit =
+          position.type === "LONG"
+            ? position.amount * (exitPrice - position.entryPrice)
+            : position.amount * (position.entryPrice - exitPrice);
         const pnlPct =
           position.type === "LONG"
             ? ((exitPrice - position.entryPrice) / position.entryPrice) * leverage
             : ((position.entryPrice - exitPrice) / position.entryPrice) * leverage;
-        const profit = position.amount * position.entryPrice * pnlPct;
         balance = Math.max(0, balance + profit);
 
         trades.push({
@@ -120,8 +127,8 @@ function runSimulation(candles: Candle[], config: StrategyConfig): BacktestResul
     // 3. Mark-to-market equity + drawdown, once per bar
     const unrealized = position
       ? position.type === "LONG"
-        ? position.amount * (price - position.entryPrice) * leverage
-        : position.amount * (position.entryPrice - price) * leverage
+        ? position.amount * (price - position.entryPrice)
+        : position.amount * (position.entryPrice - price)
       : 0;
     const equity = balance + unrealized;
     peakEquity = Math.max(peakEquity, equity);
@@ -129,6 +136,43 @@ function runSimulation(candles: Candle[], config: StrategyConfig): BacktestResul
 
     equityCurve.push({ time: candle.time, equity, drawdownPct: 0 });
     drawdownCurve.push({ time: candle.time, equity, drawdownPct });
+  }
+
+  // A position still open when the data runs out would otherwise vanish
+  // from every stat below (totalTrades, winRate, profitFactor all filter on
+  // closed trades only) even though it genuinely opened and moved the
+  // account's exposure. Mark it to the final close so the backtest reports
+  // what it actually did, same convention most backtesting engines use.
+  if (position) {
+    const lastCandle = candles[candles.length - 1]!;
+    const exitPrice = lastCandle.close;
+    const profit =
+      position.type === "LONG"
+        ? position.amount * (exitPrice - position.entryPrice)
+        : position.amount * (position.entryPrice - exitPrice);
+    const pnlPct =
+      position.type === "LONG"
+        ? ((exitPrice - position.entryPrice) / position.entryPrice) * leverage
+        : ((position.entryPrice - exitPrice) / position.entryPrice) * leverage;
+    balance = Math.max(0, balance + profit);
+
+    trades.push({
+      id: `close_eod_${lastCandle.time}`,
+      type: position.type === "LONG" ? "CLOSE_BUY" : "CLOSE_SELL",
+      price: exitPrice,
+      amount: position.amount,
+      time: lastCandle.time,
+      profit,
+      pnlPercentage: pnlPct * 100,
+      balanceAfter: balance,
+      reason: "End of Backtest Period (Mark to Close)",
+    });
+
+    if (equityCurve.length > 0) {
+      equityCurve[equityCurve.length - 1]!.equity = balance;
+      drawdownCurve[drawdownCurve.length - 1]!.equity = balance;
+    }
+    position = null;
   }
 
   const closedTrades = trades.filter((t) => t.type === "CLOSE_BUY" || t.type === "CLOSE_SELL");
