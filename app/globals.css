@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 2%;
+  --foreground: 0 0% 88%;
+  --card: 0 0% 4%;
+  --border: 0 0% 100% / 0.1;
+  --primary: 158 84% 39%; /* emerald-500 */
+  --primary-foreground: 0 0% 4%;
+  --muted: 0 0% 7%;
+  --muted-foreground: 0 0% 64%;
+  --danger: 0 84% 60%; /* rose-500 */
+  --danger-foreground: 0 0% 100%;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.3);
+}
